@@ -8,6 +8,5 @@
             "source": "/(.*)",
             "destination": "/$1"
         }
-    ],
-    "public": true
+    ]
 }
