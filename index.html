@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>나만의 AI 주식 비서</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <header class="glass-header">
+      <h1>AI 주식 비서 📈</h1>
+      <p>당신의 자산 증식을 위한 데이터 기반 인사이트</p>
+    </header>
+
+    <main>
+      <section class="welcome-section">
+        <h2>무엇을 도와드릴까요?</h2>
+        <div class="options-grid">
+          <button class="glass-btn" onclick="selectOption('analysis')">
+            <span class="icon">🔍</span>
+            <span class="text">종목 / 섹터 분석</span>
+            <span class="subtext">특정 주식이나 섹터의 전망이 궁금할 때</span>
+          </button>
+          <button class="glass-btn" onclick="selectOption('portfolio')">
+            <span class="icon">📸</span>
+            <span class="text">포트폴리오 조언</span>
+            <span class="subtext">내 토스증권 화면을 분석해 리밸런싱을 원할 때</span>
+          </button>
+          <button class="glass-btn" onclick="selectOption('news')">
+            <span class="icon">📰</span>
+            <span class="text">실시간 뉴스 추천</span>
+            <span class="subtext">이번 주 핵심 뉴스와 추천 종목을 보고 싶을 때</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Dynamic Content Area -->
+      <section id="content-area" class="content-area hidden">
+        <!-- Injected via JS -->
+      </section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
