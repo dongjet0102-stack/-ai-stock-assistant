@@ -1,6 +1,6 @@
 const contentArea = document.getElementById('content-area');
 // Render 클라우드 백엔드 주소로 변경 (배포용)
-const API_BASE = 'https://ai-stock-assistant-backend.onrender.com/api';
+const API_BASE = 'https://ai-stock-assistant-474b.onrender.com/api';
 
 function selectOption(option) {
   contentArea.classList.remove('hidden');
