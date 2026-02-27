@@ -1,15 +1,13 @@
 {
-    "version": 2,
-    "builds": [
-        {
-            "src": "*.html",
-            "use": "@vercel/static"
-        }
-    ],
-    "routes": [
+    "rewrites": [
         {
             "source": "/api/(.*)",
             "destination": "https://ai-stock-assistant-474b.onrender.com/api/$1"
+        },
+        {
+            "source": "/(.*)",
+            "destination": "/$1"
         }
-    ]
+    ],
+    "public": true
 }
