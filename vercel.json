@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://ai-stock-assistant-474b.onrender.com/api/$1"
+    }
+  ]
+}
