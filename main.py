@@ -117,7 +117,10 @@ async def weekly_news_recommendation():
     try:
         response = client.models.generate_content(
             model='gemini-2.5-flash',
-            contents=prompt
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                tools=[{"google_search": {}}],
+            )
         )
         return {"result": response.text}
     except Exception as e:
