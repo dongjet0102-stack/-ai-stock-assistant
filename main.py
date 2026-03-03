@@ -26,102 +26,68 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class AnalyzeRequest(BaseModel):
-    query: str
+import json
 
-@app.post("/api/analyze")
-async def analyze_stock(request: AnalyzeRequest):
-    query = request.query
-    
-    # 1. Try to fetch basic data from yfinance if the user entered an English Ticker (e.g., AAPL)
-    # If it's a Korean name or sector, yf might not find it directly, relying more on Gemini's vast knowledge.
-    market_data = "Market data fetch attempted."
+class ChatMessage(BaseModel):
+    role: str
+    text: str
+
+class ChatRequest(BaseModel):
+    message: str
+    history: list[ChatMessage] = []
+
+SYSTEM_PROMPT = """
+당신은 월스트리트 상위 1% 자산 운용사이자 거시경제 수석 전략가인 'AI 주식 비서'입니다.
+사용자와 자연스럽게 대화하며, 주식 분석, 포트폴리오 진단, 실시간 뉴스 추천 등 금융 관련 모든 조언을 빠르고 냉철하게 제공합니다.
+사용자의 이전 대화(포트폴리오 내용 등)를 기억하고, 뉴스나 시황을 설명할 때 그 포트폴리오에 맞춰 어떻게 대응해야 할지 구체적으로 조언하세요.
+답변은 읽기 쉽도록 마크다운을 적극 활용하고, 직설적이고 통찰력 있는 전문가의 어조를 유지하세요.
+"""
+
+@app.post("/api/chat")
+async def chat_endpoint(
+    message: str = Form(...),
+    history: str = Form("[]"), # JSON array of {role, text}
+    file: UploadFile = File(None)
+):
     try:
-        if query.encode().isalpha(): # rough check if it's an english ticker
-            ticker = yf.Ticker(query.upper())
-            info = ticker.info
-            market_data = f"Current Price: {info.get('currentPrice', 'N/A')}, P/E: {info.get('trailingPE', 'N/A')}, ROE: {info.get('returnOnEquity', 'N/A')}, Sector: {info.get('sector', 'N/A')}"
-        else:
-            market_data = f"User asked for: {query}. Please use your comprehensive training data to analyze this asset/sector."
-    except Exception as e:
-        market_data = f"Could not fetch real-time ticker data for '{query}'. Please analyze based on your training data."
+        past_messages = json.loads(history)
+    except Exception:
+        past_messages = []
 
-    # 2. Build the strict prompt for Gemini 1.5
-    prompt = f"""
-    당신은 월스트리트의 최고급 AI 주식 분석가입니다.
-    사용자가 다음 종목/섹터에 대해 질문했습니다: "{query}"
+    # Build contents array for GenAI SDK
+    contents = []
     
-    [실시간 참초 데이터 (존재할 경우)]: {market_data}
-    
-    다음 4가지 섹션을 반드시 포함하여, 투자자에게 실질적인 리포트를 매우 전문적이고 직설적인 어조로 작성하세요. HTML 형식 없이 순수 텍스트(Markdown 허용)로 작성하되 앱의 UI에 맞춰 읽기 쉽게 작성해야 합니다.
-    
-    필수 포함 내용:
-    1. 핵심 요약 및 최종 결정 (강력 매수 / 분할 매수 / 관망 / 매도 중 하나를 정확히 명시)
-    2. 펀더멘털 분석 (수익성, 기업 가치, 경영진 역량)
-    3. 거시경제(Macro) 및 센티먼트 환경 (현재 금리, 경쟁사 동향 등)
-    4. 기술적 타점 (구체적인 매수/매도 지지선 및 저항선 안내)
-    """
+    # 1. System Prompt as first user message + model ok
+    contents.append(types.Content(role="user", parts=[types.Part.from_text(SYSTEM_PROMPT)]))
+    contents.append(types.Content(role="model", parts=[types.Part.from_text("알겠습니다. 최고의 금융 인사이트를 제공하겠습니다.")]))
+
+    # 2. Append history
+    for msg in past_messages:
+        role = "user" if msg.get("role") == "user" else "model"
+        contents.append(types.Content(role=role, parts=[types.Part.from_text(msg.get("text", ""))]))
+
+    # 3. Append current message with optional image
+    parts = []
+    if file:
+        contents_bytes = await file.read()
+        image = Image.open(BytesIO(contents_bytes))
+        parts.append(image)
+        # If no message provided but image uploaded, set default prompt
+        if not message or message.strip() == "":
+            message = "내 포트폴리오 스크린샷이야. 1. 종목, 비중 파악 / 2. 약점(리스크) 팩트폭행 / 3. 리밸런싱 액션 플랜을 제안해줘."
+            
+    parts.append(types.Part.from_text(message))
+    contents.append(types.Content(role="user", parts=parts))
 
     try:
-        # Enable Google Search grounding to prevent hallucinations about real-time facts using the new SDK syntax
         response = client.models.generate_content(
             model='gemini-2.5-flash',
-            contents=prompt,
+            contents=contents,
             config=types.GenerateContentConfig(
-                tools=[{"google_search": {}}],
+                tools=[{"google_search": {}}], # Enable real-time web search for recent news
             )
         )
         return {"result": response.text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/portfolio")
-async def analyze_portfolio(file: UploadFile = File(...)):
-    if not file:
-        raise HTTPException(status_code=400, detail="No file uploaded")
-    
-    try:
-        # Read the image file
-        contents = await file.read()
-        image = Image.open(BytesIO(contents))
-        
-        # Build prompt for Gemini Vision
-        prompt = """
-        당신은 상위 1% 자산 운용사 포트폴리오 매니저입니다. 
-        첨부된 이미지는 사용자의 증권 앱(예: 토스증권) 포트폴리오 스크린샷입니다.
-        
-        1. 이미지에 있는 종목명, 수익률, 비중(또는 총액)을 완벽하게 인식해서 나열하세요.
-        2. 이 포트폴리오의 치명적인 약점(리스크)과 강점을 팩트 폭행하듯 아주 날카롭게 분석하세요. (섹터 편중, 고평가 주식 과다 등)
-        3. 수익률 극대화와 리스크 헷지를 위한 구체적인 "리밸런싱 액션 플랜(매도 종목, 추천 대체 종목)"을 제안하세요.
-        """
-        
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[prompt, image]
-        )
-        
-        return {"result": response.text}
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OCR AI Error: {str(e)}")
-
-@app.get("/api/news")
-async def weekly_news_recommendation():
-    prompt = """
-    당신은 글로벌 매크로 경제 및 주식 시장 수석 전략가입니다.
-    현재 시점을 기준으로 최근 가장 주식 시장에 큰 영향을 미치고 있는 거시 경제 뉴스 2~3가지를 요약하세요 (예: 금리, AI 인프라, 전쟁 등).
-    그리고 이러한 매크로 환경 하에서 앞으로 1개월 내에 자금이 쏠릴 것으로 예상되는 "최선호 섹터 1개"와 "가장 위험한 섹터 1개"를 명시하고,
-    최선호 섹터 내에서 당장 매수할 만한 구체적인 종목(티커 포함) 2개를 추천하고 명확한 매수 이유를 제시하세요.
-    """
-    
-    try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                tools=[{"google_search": {}}],
-            )
-        )
-        return {"result": response.text}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))

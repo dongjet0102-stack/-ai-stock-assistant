@@ -1,156 +1,139 @@
-const contentArea = document.getElementById('content-area');
-// Render 클라우드 백엔드 주소로 변경 (배포용)
-const API_BASE = 'https://ai-stock-assistant-474b.onrender.com/api';
+const chatMessages = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
+const fileUpload = document.getElementById('file-upload');
+const imagePreview = document.getElementById('image-preview');
+const previewImg = document.getElementById('preview-img');
 
-function selectOption(option) {
-  contentArea.classList.remove('hidden');
-  contentArea.style.animation = 'none';
-  void contentArea.offsetWidth;
-  contentArea.style.animation = 'fadeIn 0.5s ease';
+const API_BASE = 'https://ai-stock-assistant-474b.onrender.com/api'; // 백엔드 주소 (Render)
 
-  if (option === 'analysis') {
-    renderAnalysisUI();
-  } else if (option === 'portfolio') {
-    renderPortfolioUI();
-  } else if (option === 'news') {
-    renderNewsUI();
-  }
+let selectedFile = null;
+let chatHistory = [];
+
+function scrollToBottom() {
+  chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-function renderAnalysisUI() {
-  contentArea.innerHTML = `
-    <h2>어떤 종목, 섹터에 대하여 이야기하고 싶나요?</h2>
-    <p>예: 엔비디아, 삼성전자, AI 소프트웨어 등</p>
-    <div class="input-group">
-      <input type="text" id="stock-input" class="glass-input" placeholder="종목명 또는 섹터를 입력하세요..." onkeydown="if(event.key === 'Enter') analyzeStock()">
-      <button class="primary-btn" onclick="analyzeStock()">진짜 AI 분석하기</button>
-    </div>
-    <div id="result-container"></div>
-  `;
-}
-
-function renderPortfolioUI() {
-  contentArea.innerHTML = `
-    <h2>토스증권 포트폴리오를 캡처해서 올려주세요 📸</h2>
-    <p>포트폴리오 이미지를 Vision AI가 읽고 전문가 수준의 가혹한 리밸런싱 조언을 제공합니다.</p>
-    <p style="color: var(--accent); font-weight: bold; margin-top: 1rem;">💡 팁: 화면 캡처 후 이 화면에서 바로 [Ctrl + V] 로 붙여넣기 해보세요!</p>
-    <input type="file" id="file-input" accept="image/*" style="display: none;" onchange="handleFileUpload(event)">
-    <div class="upload-area" style="margin-top: 1.5rem; border: 2px dashed var(--glass-border); padding: 3rem; text-align: center; border-radius: 12px; cursor: pointer; transition: 0.3s;" onclick="document.getElementById('file-input').click()">
-      <span style="font-size: 3rem;">📤</span>
-      <p style="margin-top: 1rem; color: var(--text-muted);">클릭하여 업로드 하거나 화면에 붙여넣기(Ctrl+V) 하세요</p>
-    </div>
-    <div id="result-container"></div>
-  `;
-}
-
-function renderNewsUI() {
-  contentArea.innerHTML = `
-    <h2>이번 주 핵심 주식 시장 리포트 📰</h2>
-    <p>Gemini AI가 실시간으로 거시 경제 트렌드를 분석하고 주도주 섹터를 뽑아냅니다...</p>
-    <div id="result-container" style="margin-top: 2rem;">
-      <div class="loader">🔄 구글 제미나이가 글로벌 경제 상황을 추론 중입니다...</div>
-    </div>
-  `;
-  fetchNews();
-}
-
-function showLoader(containerId, message) {
-  document.getElementById(containerId).innerHTML = `
-    <div style="text-align: center; padding: 3rem 0; color: var(--accent);">
-      <div style="font-size: 2rem; margin-bottom: 1rem; animation: spin 1s linear infinite;">⚙️</div>
-      <p>${message}</p>
-    </div>
-  `;
-}
-
-function renderMarkdown(text) {
-  // Simple markdown to HTML parser for the result card
-  let html = text
-    .replace(/^### (.*$)/gim, '<h3 style="margin-top: 1.5rem; color: #a5b4fc;">$1</h3>')
-    .replace(/^## (.*$)/gim, '<h3 style="margin-top: 1.5rem; color: #a5b4fc;">$1</h3>')
-    .replace(/^\*\*([^*]+)\*\*/gim, '<b style="color: #fbbf24;">$1</b>')
-    .replace(/\n\n/g, '<br><br>')
-    .replace(/\*(.*?)\*/g, '<i>$1</i>');
-  return html;
-}
-
-async function analyzeStock() {
-  const input = document.getElementById('stock-input').value;
-  if (!input) return alert('종목명이나 섹터를 입력해주세요.');
-
-  showLoader('result-container', `야후 파이낸스 실시간 데이터 연동 및 "${input}" 제미나이 AI 분석 중...`);
-
-  try {
-    const res = await fetch(`${API_BASE}/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: input })
-    });
-    const data = await res.json();
-
-    document.getElementById('result-container').innerHTML = `
-      <div class="result-card animation-fade" style="line-height: 1.8; color: var(--text-muted);">
-        ${renderMarkdown(data.result || data.detail)}
-      </div>
-    `;
-  } catch (e) {
-    document.getElementById('result-container').innerHTML = `<p style="color:red">API Error: 백엔드 서버가 켜져 있는지 확인해주세요.</p>`;
-  }
-}
-
-async function handleFileUpload(event) {
+function handleImageSelect(event) {
   const file = event.target.files[0];
-  if (!file) return;
+  if (file) setPreview(file);
+}
 
-  showLoader('result-container', `Gemini Vision AI가 이미지를 판독(OCR)하고 분석 중입니다...`);
+function setPreview(file) {
+  selectedFile = file;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    previewImg.src = e.target.result;
+    imagePreview.classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+}
 
-  const formData = new FormData();
-  formData.append('file', file);
+function removeImage() {
+  selectedFile = null;
+  fileUpload.value = '';
+  imagePreview.classList.add('hidden');
+  previewImg.src = '';
+}
 
-  try {
-    const res = await fetch(`${API_BASE}/portfolio`, {
-      method: "POST",
-      body: formData
-    });
-    const data = await res.json();
-
-    document.getElementById('result-container').innerHTML = `
-      <div class="result-card animation-fade" style="line-height: 1.8; color: var(--text-muted);">
-        ${renderMarkdown(data.result || data.detail)}
-      </div>
-    `;
-  } catch (e) {
-    document.getElementById('result-container').innerHTML = `<p style="color:red">Upload Error.</p>`;
+function handleEnter(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
   }
 }
 
-async function fetchNews() {
-  try {
-    const res = await fetch(`${API_BASE}/news`);
-    const data = await res.json();
-    document.getElementById('result-container').innerHTML = `
-      <div class="result-card animation-fade" style="line-height: 1.8; color: var(--text-muted);">
-        ${renderMarkdown(data.result || data.detail)}
-      </div>
-    `;
-  } catch (e) {
-    document.getElementById('result-container').innerHTML = `<p style="color:red">API Error: 백엔드 서버 연결 실패.</p>`;
-  }
-}
-
-// 스크린샷 캡처 후 Ctrl+V 로 바로 붙여넣기 지원
-document.addEventListener('paste', (event) => {
-  // 포트폴리오 화면이 열려있을 때만 작동 (file-input 존재 여부 확인)
-  const fileInput = document.getElementById('file-input');
-  if (!fileInput) return;
-
-  const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+// 클립보드 붙여넣기 지원
+document.addEventListener('paste', (e) => {
+  const items = (e.clipboardData || e.originalEvent.clipboardData).items;
   for (let index in items) {
     const item = items[index];
     if (item.kind === 'file' && item.type.startsWith('image/')) {
       const blob = item.getAsFile();
-      const mockEvent = { target: { files: [blob] } };
-      handleFileUpload(mockEvent); // 캡처된 이미지를 업로드 함수로 전달
+      setPreview(blob);
     }
   }
 });
+
+function renderMarkdown(text) {
+  return text
+    .replace(/^### (.*$)/gim, '<h3 style="margin-top: 1.5rem; color: #a5b4fc;">$1</h3>')
+    .replace(/^## (.*$)/gim, '<h3 style="margin-top: 1.5rem; color: #a5b4fc;">$1</h3>')
+    .replace(/^\*\*([^*]+)\*\*/gim, '<b style="color: #fbbf24;">$1</b>')
+    .replace(/\n\n/g, '<br><br>')
+    .replace(/\n/g, '<br>')
+    .replace(/\*(.*?)\*/g, '<i>$1</i>');
+}
+
+function appendMessage(role, text, imageUrl = null) {
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'message ' + (role === 'user' ? 'user-message' : 'ai-message');
+
+  let contentHtml = '';
+  if (imageUrl) {
+    contentHtml += `<img src="${imageUrl}" class="msg-image"/>`;
+  }
+  if (text) {
+    contentHtml += `<div>${renderMarkdown(text)}</div>`;
+  }
+
+  if (role === 'model') {
+    msgDiv.innerHTML = `<div class="avatar">🤖</div><div class="bubble">${contentHtml}</div>`;
+  } else {
+    msgDiv.innerHTML = `<div class="bubble">${contentHtml}</div>`;
+  }
+
+  chatMessages.appendChild(msgDiv);
+  scrollToBottom();
+  return msgDiv;
+}
+
+function sendQuickMessage(text) {
+  chatInput.value = text;
+  sendMessage();
+}
+
+async function sendMessage() {
+  const text = chatInput.value.trim();
+  if (!text && !selectedFile) return;
+
+  // UI 반영
+  const currentImage = selectedFile ? previewImg.src : null;
+  appendMessage('user', text, currentImage);
+
+  // 로딩 메시지
+  const loadingDiv = appendMessage('model', '<div class="loader">분석 중입니다... 🔄</div>');
+
+  // FormData 구성
+  const formData = new FormData();
+  formData.append('message', text);
+  formData.append('history', JSON.stringify(chatHistory));
+  if (selectedFile) {
+    formData.append('file', selectedFile);
+  }
+
+  // 히스토리에 추가 (보내기 전 유저 메시지)
+  chatHistory.push({ role: 'user', text: text });
+
+  // Reset input
+  chatInput.value = '';
+  removeImage();
+
+  try {
+    const res = await fetch(`${API_BASE}/chat`, {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+
+    // 로딩 문구 제거 및 AI 응답 추가
+    loadingDiv.remove();
+    appendMessage('model', data.result || data.detail);
+
+    // 히스토리에 추가 (모델 메시지)
+    chatHistory.push({ role: 'model', text: data.result || data.detail });
+  } catch (e) {
+    loadingDiv.remove();
+    appendMessage('model', '<span style="color:red">서버 통신 오류가 발생했습니다. 백엔드(Render) 서버가 켜져 있는지 확인해주세요.</span>');
+    chatHistory.pop(); // 에러 발생 시 히스토리 원복
+  }
+}
