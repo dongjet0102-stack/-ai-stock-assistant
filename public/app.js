@@ -3,11 +3,28 @@ const chatInput = document.getElementById('chat-input');
 const fileUpload = document.getElementById('file-upload');
 const imagePreview = document.getElementById('image-preview');
 const previewImg = document.getElementById('preview-img');
+const welcomeSection = document.getElementById('welcome-section');
 
 const API_BASE = 'https://ai-stock-assistant-474b.onrender.com/api'; // 백엔드 주소 (Render)
 
 let selectedFile = null;
 let chatHistory = [];
+
+function selectOption(option) {
+  // 웰컴 섹션(버튼 3개) 숨기기
+  if (welcomeSection) {
+    welcomeSection.style.display = 'none';
+  }
+
+  if (option === 'analysis') {
+    appendMessage('model', '🔍 **[종목 / 섹터 분석]** 모드입니다.<br>궁금하신 특정 주식이나 섹터 이름(예: 삼성전자, AI 반도체 등)을 하단에 자유롭게 입력해주세요.');
+  } else if (option === 'portfolio') {
+    appendMessage('model', '📸 **[포트폴리오 조언]** 모드입니다.<br>현재 보유 중이신 증권 화면(토스증권 등)을 캡처해서 하단 클립(📎) 버튼이나 **Ctrl+V**로 붙여넣어 전송해주세요. 날카로운 팩트 폭행과 리밸런싱을 제안해 드립니다.');
+  } else if (option === 'news') {
+    appendMessage('model', '📰 **[실시간 뉴스 추천]** 이번 주 거시 경제 흐름과 추천 종목 브리핑을 준비합니다...');
+    sendQuickMessage('이번 주 가장 큰 영향을 미치는 거시경제 뉴스를 요약하고, 관련 최선호 섹터와 2가지 종목을 추천해줘. 실시간 구글 검색을 활용해줘.');
+  }
+}
 
 function scrollToBottom() {
   chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -70,7 +87,7 @@ function appendMessage(role, text, imageUrl = null) {
 
   let contentHtml = '';
   if (imageUrl) {
-    contentHtml += `<img src="${imageUrl}" class="msg-image"/>`;
+    contentHtml += `<img src="${imageUrl}" class="msg-image" style="max-width: 250px; border-radius: 8px; margin-bottom: 8px; display: block;"/>`;
   }
   if (text) {
     contentHtml += `<div>${renderMarkdown(text)}</div>`;
@@ -95,6 +112,11 @@ function sendQuickMessage(text) {
 async function sendMessage() {
   const text = chatInput.value.trim();
   if (!text && !selectedFile) return;
+
+  // 첫 번째 메시지가 전송될 때 웰컴 버튼들 숨기기
+  if (welcomeSection) {
+    welcomeSection.style.display = 'none';
+  }
 
   // UI 반영
   const currentImage = selectedFile ? previewImg.src : null;
@@ -121,6 +143,7 @@ async function sendMessage() {
   // Reset input
   chatInput.value = '';
   removeImage();
+  chatInput.style.height = 'auto';
 
   try {
     const res = await fetch(`${API_BASE}/chat`, {
