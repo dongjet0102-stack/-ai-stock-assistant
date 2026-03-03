@@ -107,6 +107,10 @@ async function sendMessage() {
   const formData = new FormData();
   formData.append('message', text);
   formData.append('history', JSON.stringify(chatHistory));
+
+  const selectedModel = document.getElementById('model-select').value;
+  formData.append('model_type', selectedModel);
+
   if (selectedFile) {
     formData.append('file', selectedFile);
   }

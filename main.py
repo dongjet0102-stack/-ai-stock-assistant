@@ -47,6 +47,7 @@ SYSTEM_PROMPT = """
 async def chat_endpoint(
     message: str = Form(...),
     history: str = Form("[]"), # JSON array of {role, text}
+    model_type: str = Form("gemini-2.5-flash"), # 플래시/프로 모델 선택 파라미터 추가
     file: UploadFile = File(None)
 ):
     try:
@@ -81,7 +82,7 @@ async def chat_endpoint(
 
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model=model_type,
             contents=contents,
             config=types.GenerateContentConfig(
                 tools=[{"google_search": {}}], # Enable real-time web search for recent news
