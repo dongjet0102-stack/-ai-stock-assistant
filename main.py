@@ -8,11 +8,10 @@ from google.genai import types
 from io import BytesIO
 from PIL import Image
 
-# Configure Gemini API Key (Secret loaded from Environment Variable on Render)
+# Configure Gemini API Key (Set GEMINI_API_KEY in Render Environment Variables!)
 api_key = os.environ.get("GEMINI_API_KEY")
 if not api_key:
-    # Fallback to local key for testing if env var isn't set
-    api_key = "AIzaSyC7omD4yV5oJyuAsqio35wGU_N1115qIs4"
+    raise RuntimeError("GEMINI_API_KEY 환경변수가 설정되지 않았습니다. Render 대시보드 → Environment에서 키를 추가해주세요.")
 client = genai.Client(api_key=api_key)
 
 app = FastAPI()
