@@ -92,3 +92,7 @@ async def chat_endpoint(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/ping")
+async def ping():
+    """서버 웜업용 ping 엔드포인트 - Render 콜드스타트 방지"""
+    return {"status": "ok"}

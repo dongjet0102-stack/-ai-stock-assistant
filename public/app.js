@@ -5,24 +5,63 @@ const imagePreview = document.getElementById('image-preview');
 const previewImg = document.getElementById('preview-img');
 const welcomeSection = document.getElementById('welcome-section');
 
-const API_BASE = 'https://ai-stock-assistant-474b.onrender.com/api'; // 백엔드 주소 (Render)
+const API_BASE = 'https://ai-stock-assistant-474b.onrender.com/api';
 
 let selectedFile = null;
 let chatHistory = [];
+let serverReady = false;
 
-function selectOption(option) {
-  // 웰컴 섹션(버튼 3개) 숨기기
-  if (welcomeSection) {
-    welcomeSection.style.display = 'none';
+// ────────────────────────────────────────
+// 서버 웜업 (Render 콜드스타트 방지)
+// ────────────────────────────────────────
+async function wakeUpServer() {
+  try {
+    await fetch(`${API_BASE}/ping`, { method: 'GET', signal: AbortSignal.timeout(30000) });
+    serverReady = true;
+  } catch (e) {
+    // 첫 번째 ping 실패해도 실제 요청 시도에 맡김
+    serverReady = false;
   }
+}
+// 페이지 로드 시 미리 깨우기
+wakeUpServer();
+
+// ────────────────────────────────────────
+// 홈 화면으로 돌아가기
+// ────────────────────────────────────────
+function goHome() {
+  // 웰컴 섹션 다시 보이기
+  if (welcomeSection) welcomeSection.style.display = '';
+
+  // AI 메시지 / 유저 메시지 제거 (웰컴 섹션 이후에 추가된 것들)
+  const messages = chatMessages.querySelectorAll('.message');
+  messages.forEach(m => m.remove());
+
+  // 히스토리 초기화
+  chatHistory = [];
+
+  // 이미지 초기화
+  removeImage();
+
+  // 입력창 초기화
+  chatInput.value = '';
+}
+
+// ────────────────────────────────────────
+// 버튼 3개: 옵션 선택
+// ────────────────────────────────────────
+function selectOption(option) {
+  if (welcomeSection) welcomeSection.style.display = 'none';
 
   if (option === 'analysis') {
-    appendMessage('model', '🔍 **[종목 / 섹터 분석]** 모드입니다.<br>궁금하신 특정 주식이나 섹터 이름(예: 삼성전자, AI 반도체 등)을 하단에 자유롭게 입력해주세요.');
+    appendMessage('model', '🔍 **[종목 / 섹터 분석]** 모드입니다.\n궁금하신 특정 주식이나 섹터 이름(예: 삼성전자, AI 반도체 등)을 입력해주세요.');
   } else if (option === 'portfolio') {
-    appendMessage('model', '📸 **[포트폴리오 조언]** 모드입니다.<br>현재 보유 중이신 증권 화면(토스증권 등)을 캡처해서 하단 클립(📎) 버튼이나 **Ctrl+V**로 붙여넣어 전송해주세요. 날카로운 팩트 폭행과 리밸런싱을 제안해 드립니다.');
+    appendMessage('model', '📸 **[포트폴리오 조언]** 모드입니다.\n증권 화면(토스증권 등)을 캡처해서 📎 버튼이나 **Ctrl+V**로 붙여넣어 전송해주세요. 날카로운 팩트 폭행과 리밸런싱을 제안해 드립니다.');
   } else if (option === 'news') {
     appendMessage('model', '📰 **[실시간 뉴스 추천]** 이번 주 거시 경제 흐름과 추천 종목 브리핑을 준비합니다...');
-    sendQuickMessage('이번 주 가장 큰 영향을 미치는 거시경제 뉴스를 요약하고, 관련 최선호 섹터와 2가지 종목을 추천해줘. 실시간 구글 검색을 활용해줘.');
+    setTimeout(() => {
+      sendQuickMessage('이번 주 가장 큰 영향을 미치는 거시경제 뉴스를 요약하고, 최선호 섹터와 종목 2가지를 추천해줘. 실시간 구글 검색을 활용해줘.');
+    }, 500);
   }
 }
 
@@ -47,9 +86,9 @@ function setPreview(file) {
 
 function removeImage() {
   selectedFile = null;
-  fileUpload.value = '';
-  imagePreview.classList.add('hidden');
-  previewImg.src = '';
+  if (fileUpload) fileUpload.value = '';
+  if (imagePreview) imagePreview.classList.add('hidden');
+  if (previewImg) previewImg.src = '';
 }
 
 function handleEnter(e) {
@@ -59,23 +98,22 @@ function handleEnter(e) {
   }
 }
 
-// 클립보드 붙여넣기 지원
+// Ctrl+V 이미지 붙여넣기
 document.addEventListener('paste', (e) => {
   const items = (e.clipboardData || e.originalEvent.clipboardData).items;
   for (let index in items) {
     const item = items[index];
     if (item.kind === 'file' && item.type.startsWith('image/')) {
-      const blob = item.getAsFile();
-      setPreview(blob);
+      setPreview(item.getAsFile());
     }
   }
 });
 
 function renderMarkdown(text) {
   return text
-    .replace(/^### (.*$)/gim, '<h3 style="margin-top: 1.5rem; color: #a5b4fc;">$1</h3>')
-    .replace(/^## (.*$)/gim, '<h3 style="margin-top: 1.5rem; color: #a5b4fc;">$1</h3>')
-    .replace(/^\*\*([^*]+)\*\*/gim, '<b style="color: #fbbf24;">$1</b>')
+    .replace(/^### (.*$)/gim, '<h3 style="margin-top:1.5rem;color:#a5b4fc;">$1</h3>')
+    .replace(/^## (.*$)/gim, '<h3 style="margin-top:1.5rem;color:#a5b4fc;">$1</h3>')
+    .replace(/\*\*([^*]+)\*\*/gim, '<b style="color:#fbbf24;">$1</b>')
     .replace(/\n\n/g, '<br><br>')
     .replace(/\n/g, '<br>')
     .replace(/\*(.*?)\*/g, '<i>$1</i>');
@@ -87,7 +125,7 @@ function appendMessage(role, text, imageUrl = null) {
 
   let contentHtml = '';
   if (imageUrl) {
-    contentHtml += `<img src="${imageUrl}" class="msg-image" style="max-width: 250px; border-radius: 8px; margin-bottom: 8px; display: block;"/>`;
+    contentHtml += `<img src="${imageUrl}" style="max-width:250px;border-radius:8px;margin-bottom:8px;display:block;"/>`;
   }
   if (text) {
     contentHtml += `<div>${renderMarkdown(text)}</div>`;
@@ -113,54 +151,49 @@ async function sendMessage() {
   const text = chatInput.value.trim();
   if (!text && !selectedFile) return;
 
-  // 첫 번째 메시지가 전송될 때 웰컴 버튼들 숨기기
-  if (welcomeSection) {
-    welcomeSection.style.display = 'none';
-  }
+  // 웰컴 버튼 숨기기
+  if (welcomeSection) welcomeSection.style.display = 'none';
 
-  // UI 반영
   const currentImage = selectedFile ? previewImg.src : null;
   appendMessage('user', text, currentImage);
 
-  // 로딩 메시지
-  const loadingDiv = appendMessage('model', '<div class="loader">분석 중입니다... 🔄</div>');
+  const loadingDiv = appendMessage('model', '<div class="loader">분석 중입니다... 🔄<br><small style="color:var(--text-muted);font-weight:400;">처음 요청 시 서버가 깨어나는 데 최대 1~2분이 소요될 수 있습니다.</small></div>');
 
-  // FormData 구성
   const formData = new FormData();
   formData.append('message', text);
   formData.append('history', JSON.stringify(chatHistory));
+  formData.append('model_type', document.getElementById('model-select').value);
+  if (selectedFile) formData.append('file', selectedFile);
 
-  const selectedModel = document.getElementById('model-select').value;
-  formData.append('model_type', selectedModel);
-
-  if (selectedFile) {
-    formData.append('file', selectedFile);
-  }
-
-  // 히스토리에 추가 (보내기 전 유저 메시지)
   chatHistory.push({ role: 'user', text: text });
 
-  // Reset input
   chatInput.value = '';
   removeImage();
-  chatInput.style.height = 'auto';
 
   try {
+    // 타임아웃 120초 (Render 콜드스타트 포함)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120000);
+
     const res = await fetch(`${API_BASE}/chat`, {
       method: 'POST',
-      body: formData
+      body: formData,
+      signal: controller.signal
     });
+    clearTimeout(timeout);
+
     const data = await res.json();
-
-    // 로딩 문구 제거 및 AI 응답 추가
     loadingDiv.remove();
-    appendMessage('model', data.result || data.detail);
-
-    // 히스토리에 추가 (모델 메시지)
+    appendMessage('model', data.result || data.detail || '응답을 받지 못했습니다.');
     chatHistory.push({ role: 'model', text: data.result || data.detail });
+
   } catch (e) {
     loadingDiv.remove();
-    appendMessage('model', '<span style="color:red">서버 통신 오류가 발생했습니다. 백엔드(Render) 서버가 켜져 있는지 확인해주세요.</span>');
-    chatHistory.pop(); // 에러 발생 시 히스토리 원복
+    if (e.name === 'AbortError') {
+      appendMessage('model', `<span style="color:red">⏱ 서버 응답 시간을 초과했습니다. Render 무료 서버가 잠들어 있다면 처음 요청이 오래 걸릴 수 있습니다. 잠시 후 다시 시도해주세요.</span>`);
+    } else {
+      appendMessage('model', `<span style="color:red">🔌 서버 연결 실패: 백엔드(Render) 서버가 아직 깨어나는 중일 수 있습니다. 잠시 후(약 1분) 다시 보내주세요.</span>`);
+    }
+    chatHistory.pop();
   }
 }

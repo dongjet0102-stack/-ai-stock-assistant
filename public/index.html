@@ -12,11 +12,32 @@
 <body>
   <div class="app-container chat-layout">
     <header class="glass-header chat-header">
-      <h1>AI 주식 비서 📈</h1>
-      <p>당신의 자산 증식을 위한 데이터 기반 인사이트</p>
-      <div style="margin-top: 15px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
+        <div>
+          <h1>AI 주식 비서 📈</h1>
+          <p>당신의 자산 증식을 위한 데이터 기반 인사이트</p>
+        </div>
+        <!-- 홈으로 돌아가기 버튼 -->
+        <button onclick="goHome()" style="
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.2);
+          color: var(--text-main);
+          border-radius: 10px;
+          padding: 0.6rem 1.2rem;
+          cursor: pointer;
+          font-size: 0.9rem;
+          font-family: inherit;
+          transition: 0.2s;
+          white-space: nowrap;
+        " onmouseover="this.style.background='rgba(255,255,255,0.15)'"
+          onmouseout="this.style.background='rgba(255,255,255,0.08)'">
+          🏠 홈으로
+        </button>
+      </div>
+      <!-- 모델 선택 -->
+      <div style="margin-top: 1rem;">
         <select id="model-select" class="glass-input"
-          style="padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.9rem; cursor: pointer; width: 100%; max-width: 350px;">
+          style="padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.9rem; cursor: pointer; width: 100%; max-width: 380px;">
           <option value="gemini-2.5-flash">🚀 플래시 모델 (매우 빠름, 하루 1500회 무료)</option>
           <option value="gemini-2.5-pro">🧠 프로 모델 (심층 분석 전문가, 분당 2회 무료)</option>
         </select>
@@ -26,7 +47,7 @@
     <main class="chat-main">
       <div id="chat-messages" class="chat-messages">
 
-        <!-- Welcome Section (Original 3 Buttons) -->
+        <!-- Welcome Section -->
         <section id="welcome-section" class="welcome-section" style="margin-bottom: 2rem;">
           <h2 style="text-align:center; font-size:1.5rem; margin-bottom:1.5rem;">무엇을 도와드릴까요?</h2>
           <div class="options-grid">
@@ -53,7 +74,7 @@
 
       </div>
 
-      <div class="chat-input-wrapper">
+      <div class="chat-input-wrapper" style="position: relative;">
         <div id="image-preview" class="image-preview hidden">
           <img id="preview-img" src="" alt="preview" />
           <button class="remove-img-btn" onclick="removeImage()">✕</button>
