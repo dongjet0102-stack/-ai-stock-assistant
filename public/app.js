@@ -10,19 +10,45 @@ const API_BASE = 'https://ai-stock-assistant-474b.onrender.com/api';
 let selectedFile = null;
 let chatHistory = [];
 let serverReady = false;
+let pendingFormData = null; // 재시도를 위한 대기 중인 요청
 
 // ────────────────────────────────────────
 // 서버 웜업 (Render 콜드스타트 방지)
 // ────────────────────────────────────────
 async function wakeUpServer() {
   try {
-    await fetch(`${API_BASE}/ping`, { method: 'GET', signal: AbortSignal.timeout(30000) });
-    serverReady = true;
+    const res = await fetch(`${API_BASE}/ping`, { method: 'GET', signal: AbortSignal.timeout(60000) });
+    if (res.ok) {
+      serverReady = true;
+      console.log('✅ 서버 준비 완료');
+    }
   } catch (e) {
-    // 첫 번째 ping 실패해도 실제 요청 시도에 맡김
     serverReady = false;
+    console.warn('⚠️ 서버 웜업 실패 (첫 요청 시도 시 자동 재시도)');
   }
 }
+
+// 재시도 포함 fetch
+async function fetchWithRetry(url, options, maxRetries = 3, retryDelay = 15000) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 90000);
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timeout);
+      return res;
+    } catch (e) {
+      if (e.name === 'AbortError') throw e; // 타임아웃은 재시도 안 함
+      if (attempt < maxRetries) {
+        console.warn(`🔄 재시도 ${attempt}/${maxRetries - 1} - ${retryDelay / 1000}초 후 재연결...`);
+        await new Promise(r => setTimeout(r, retryDelay));
+      } else {
+        throw e;
+      }
+    }
+  }
+}
+
 // 페이지 로드 시 미리 깨우기
 wakeUpServer();
 
@@ -147,53 +173,114 @@ function sendQuickMessage(text) {
   sendMessage();
 }
 
-async function sendMessage() {
-  const text = chatInput.value.trim();
-  if (!text && !selectedFile) return;
+async function sendMessage(retryFormData = null) {
+  let text = '';
+  let currentImage = null;
+  let formData;
 
-  // 웰컴 버튼 숨기기
-  if (welcomeSection) welcomeSection.style.display = 'none';
+  if (retryFormData) {
+    // 재시도의 경우 기존 formData 재사용
+    formData = retryFormData;
+    text = formData.get('message') || '';
+  } else {
+    text = chatInput.value.trim();
+    if (!text && !selectedFile) return;
 
-  const currentImage = selectedFile ? previewImg.src : null;
-  appendMessage('user', text, currentImage);
+    // 웰컴 버튼 숨기기
+    if (welcomeSection) welcomeSection.style.display = 'none';
 
-  const loadingDiv = appendMessage('model', '<div class="loader">분석 중입니다... 🔄<br><small style="color:var(--text-muted);font-weight:400;">처음 요청 시 서버가 깨어나는 데 최대 1~2분이 소요될 수 있습니다.</small></div>');
+    currentImage = selectedFile ? previewImg.src : null;
+    appendMessage('user', text, currentImage);
 
-  const formData = new FormData();
-  formData.append('message', text);
-  formData.append('history', JSON.stringify(chatHistory));
-  formData.append('model_type', document.getElementById('model-select').value);
-  if (selectedFile) formData.append('file', selectedFile);
+    formData = new FormData();
+    formData.append('message', text);
+    formData.append('history', JSON.stringify(chatHistory));
+    formData.append('model_type', document.getElementById('model-select').value);
+    if (selectedFile) formData.append('file', selectedFile);
 
-  chatHistory.push({ role: 'user', text: text });
+    chatHistory.push({ role: 'user', text: text });
+    chatInput.value = '';
+    removeImage();
+  }
 
-  chatInput.value = '';
-  removeImage();
+  // 로딩 메시지 표시
+  const loadingBubble = document.createElement('div');
+  loadingBubble.className = 'message ai-message';
+  loadingBubble.innerHTML = `
+    <div class="avatar">🤖</div>
+    <div class="bubble" id="loading-status">
+      <div class="loader">서버에 연결 중... 🔌</div>
+      <small style="color:var(--text-muted);">Render 서버가 슬립 상태라면 최대 1~2분 소요됩니다.<br>자동으로 재시도합니다.</small>
+      <div id="retry-counter" style="margin-top:0.5rem;color:#a5b4fc;font-size:0.85rem;"></div>
+    </div>`;
+  chatMessages.appendChild(loadingBubble);
+  scrollToBottom();
 
-  try {
-    // 타임아웃 120초 (Render 콜드스타트 포함)
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000);
+  const retryCounter = document.getElementById('retry-counter');
+  const MAX_RETRIES = 4;
+  const RETRY_DELAY = 15000; // 15초
 
-    const res = await fetch(`${API_BASE}/chat`, {
-      method: 'POST',
-      body: formData,
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      if (attempt > 1 && retryCounter) {
+        retryCounter.textContent = `🔄 재시도 중... (${attempt - 1}/${MAX_RETRIES - 1})`;
+      }
 
-    const data = await res.json();
-    loadingDiv.remove();
-    appendMessage('model', data.result || data.detail || '응답을 받지 못했습니다.');
-    chatHistory.push({ role: 'model', text: data.result || data.detail });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 90000);
 
-  } catch (e) {
-    loadingDiv.remove();
-    if (e.name === 'AbortError') {
-      appendMessage('model', `<span style="color:red">⏱ 서버 응답 시간을 초과했습니다. Render 무료 서버가 잠들어 있다면 처음 요청이 오래 걸릴 수 있습니다. 잠시 후 다시 시도해주세요.</span>`);
-    } else {
-      appendMessage('model', `<span style="color:red">🔌 서버 연결 실패: 백엔드(Render) 서버가 아직 깨어나는 중일 수 있습니다. 잠시 후(약 1분) 다시 보내주세요.</span>`);
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      const data = await res.json();
+      loadingBubble.remove();
+      appendMessage('model', data.result || data.detail || '응답을 받지 못했습니다.');
+      chatHistory.push({ role: 'model', text: data.result || data.detail });
+      serverReady = true;
+      return; // 성공 시 종료
+
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        // 90초 타임아웃 → 재시도 없음
+        loadingBubble.remove();
+        appendMessage('model', `<span style="color:#f87171">⏱ <b>응답 시간 초과</b><br>Render 서버가 응답하지 않습니다. 잠시 후 다시 시도해주세요.</span>`);
+        chatHistory.pop();
+        return;
+      }
+
+      if (attempt < MAX_RETRIES) {
+        // 재연결 대기
+        if (retryCounter) retryCounter.textContent = `⏳ 재시도 대기 중... (${attempt}/${MAX_RETRIES - 1}) — ${RETRY_DELAY / 1000}초 후`;
+        await new Promise(r => setTimeout(r, RETRY_DELAY));
+      } else {
+        // 최종 실패
+        loadingBubble.remove();
+        const errorDiv = appendMessage('model', `
+          <span style="color:#f87171">🔌 <b>서버 연결 실패</b><br>
+          Render 무료 서버가 슬립 상태이거나 문제가 있습니다.<br>
+          <small style="color:var(--text-muted)">잠시 후 아래 버튼으로 다시 시도하세요.</small>
+          </span>`);
+        // 재전송 버튼 추가
+        const retryBtn = document.createElement('button');
+        retryBtn.textContent = '🔁 다시 보내기';
+        retryBtn.style.cssText = `
+          margin-top: 0.8rem; display: block;
+          background: var(--accent); color: white;
+          border: none; border-radius: 8px;
+          padding: 0.5rem 1.2rem; cursor: pointer; font-weight: 600;`;
+        retryBtn.onclick = () => {
+          errorDiv.remove();
+          chatHistory.pop();
+          sendMessage(formData);
+        };
+        errorDiv.querySelector('.bubble').appendChild(retryBtn);
+        chatHistory.pop();
+      }
     }
-    chatHistory.pop();
   }
 }
+
